@@ -39,3 +39,57 @@ def test_GivenSuccessfulDockerExecution_WhenRunningTests_ThenPassed(mock_run):
     assert result["returncode"] == 0
     assert "3 passed" in result["output"]
     mock_run.assert_called_once()
+
+
+from tools.test_runner import validate_source_path
+
+
+def test_GivenValidSource_WhenValidating_ThenAccepted():
+    result = validate_source_path("examples/string_utils.py")
+
+    assert result is not None
+    assert result.name == "string_utils.py"
+
+
+def test_GivenWindowsPath_WhenValidating_ThenAccepted():
+    result = validate_source_path(
+        r"examples\string_utils.py"
+    )
+
+    assert result is not None
+    assert result.name == "string_utils.py"
+
+
+def test_GivenTraversalPath_WhenValidating_ThenRejected():
+    result = validate_source_path(
+        "examples/../tools/test_runner.py"
+    )
+
+    assert result is None
+
+
+def test_GivenOutsideSource_WhenValidating_ThenRejected():
+    result = validate_source_path(
+        "tools/test_runner.py"
+    )
+
+    assert result is None
+
+
+def test_GivenMissingSource_WhenValidating_ThenRejected():
+    result = validate_source_path(
+        "examples/missing_source.py"
+    )
+
+    assert result is None
+
+
+def test_GivenInvalidSource_WhenRunning_ThenError():
+    result = run_generated_tests(
+        "test_ai_string_utils.py",
+        approved=True,
+        source_path="tools/test_runner.py",
+    )
+
+    assert result["status"] == "error"
+

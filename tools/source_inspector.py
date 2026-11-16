@@ -51,11 +51,12 @@ def inspect_python_source(file_path: str) -> dict:
         return result
 
     functions = [
-        node.name
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and not node.name.startswith("_")
-    ]
+    node.name
+    for node in tree.body
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    and not node.name.startswith("_")
+    and not node.name.startswith("test_")
+]
 
     module = ".".join(
         Path(file_path.replace("\\", "/")).with_suffix("").parts
