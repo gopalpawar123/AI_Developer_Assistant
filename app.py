@@ -6,6 +6,10 @@ from tools.test_writer import save_generated_test
 from tools.test_runner import run_generated_tests
 from tools.result_analyzer import analyze_test_result
 from tools.test_validator import validate_generated_test
+from tools.source_inspector import (
+    extract_source_path,
+    inspect_python_source
+)
 
 
 def extract_python_code(response):
@@ -37,11 +41,19 @@ def is_test_generation_request(user_input):
     )
 
 
-def handle_test_execution(filename):
-    """Request approval and execute saved tests in Docker."""
+def handle_test_execution(filename, source_path):
+    """Request approval and execute supported tests in Docker."""
 
     print("\nThe generated test file has been saved.")
-    print("Docker execution is available for the calculator example.")
+
+    # The current Docker runner only stages calculator.py.
+    if source_path.replace("\\", "/") != "examples/calculator.py":
+        print(
+            "\nDocker execution is currently supported only for "
+            "examples/calculator.py."
+        )
+        print("The generated test file has been saved but not executed.")
+        return
 
     approval = input(
         "\nWould you like to execute these tests in Docker? (yes/no): "
@@ -104,7 +116,7 @@ def main():
     print("- Code Analyzer")
     print("- Unit Test Generator")
     print("- Test File Writer")
-    print("- Test Code Validator")
+    print("- Source-Aware Test Validator")
     print("- Docker Test Runner")
     print("- AI Failure Analyzer")
     print("Type 'exit' to close.")
@@ -126,9 +138,32 @@ def main():
 
             print("\nAI Assistant:\n", response)
 
-            # Check whether test generation was requested.
+            # Continue normal conversation if tests were not requested.
             if not is_test_generation_request(user_input):
                 continue
+
+            # Phase 4.9: Identify the requested Python source file.
+            source_path = extract_source_path(user_input)
+
+            if not source_path:
+                print(
+                    "\nUnable to identify a Python source file "
+                    "in the request."
+                )
+                continue
+
+            # Inspect the source before validating generated code.
+            source_info = inspect_python_source(source_path)
+
+            if not source_info["valid"]:
+                print(
+                    "\nSource inspection failed:",
+                    source_info["error"]
+                )
+                continue
+
+            print("\nSource module:", source_info["module"])
+            print("Available functions:", source_info["functions"])
 
             # Extract generated Python code.
             code = extract_python_code(response)
@@ -137,12 +172,13 @@ def main():
                 print("\nNo Python test code found in the response.")
                 continue
 
-            # Phase 4.8: Validate before saving.
+            # Validate generated code against the actual source module.
             print("\nValidating generated test code...")
 
             validation = validate_generated_test(
                 code,
-                required_imports=["add", "divide"]
+                required_imports=source_info["functions"],
+                source_module=source_info["module"]
             )
 
             if not validation["valid"]:
@@ -183,12 +219,11 @@ def main():
 
             print("\n", save_result)
 
-            # Execute only after a successful save.
             if not save_result.startswith("Saved successfully:"):
                 continue
 
-            # Request separate approval for Docker execution.
-            handle_test_execution(filename)
+            # Docker execution still requires explicit approval.
+            handle_test_execution(filename, source_path)
 
         except (KeyboardInterrupt, EOFError):
             print("\nAI Assistant: Goodbye!")
