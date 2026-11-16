@@ -8,80 +8,98 @@ from tools.test_generator import generate_unit_tests
 
 MODEL_NAME = "qwen2.5:3b"
 
-AVAILABLE_TOOLS = {
-    "read_file": read_file,
-    "analyze_code": analyze_code,
-    "generate_unit_tests": generate_unit_tests
-}
+SYSTEM_PROMPT = """
+You are an AI Developer Assistant.
+
+Your responsibilities:
+- Explain source code clearly.
+- Analyze Python, C++, and Java code.
+- Generate unit tests for source code.
+- Identify potential bugs and edge cases.
+
+When generating Python tests:
+- Use pytest.
+- Include all required imports.
+- Generate complete executable test code.
+- Include normal, edge, and exception cases.
+- Return code inside a ```python Markdown code block.
+- Do not invent unavailable APIs.
+
+When generating C++ tests:
+- Use Google Test.
+- Prefer ASSERT_* assertions.
+- Do not use GoogleMock.
+- Use Given_When_Then style test names.
+
+Never claim to have read a file unless its contents
+were successfully returned by a tool.
+"""
 
 
 def run_developer_agent(user_input: str):
 
+    request = user_input.lower()
+
+    # Extract a source file path from the user's request.
+    import re
+
+    match = re.search(
+        r"([\w./\\-]+\.(?:py|cpp|cxx|cc|h|hpp|java))\b",
+        user_input,
+        re.IGNORECASE
+    )
+
+    file_path = match.group(1) if match else None
+
+    tool_result = None
+
+    if file_path:
+
+        if (
+            "test" in request
+            and any(word in request for word in ["generate", "create", "write"])
+        ):
+            print(f"[DEBUG] Running generate_unit_tests: {file_path}")
+            tool_result = generate_unit_tests(file_path)
+
+        elif any(word in request for word in ["analyze", "review", "bug"]):
+            print(f"[DEBUG] Running analyze_code: {file_path}")
+            tool_result = analyze_code(file_path)
+
+        else:
+            print(f"[DEBUG] Running read_file: {file_path}")
+            tool_result = read_file(file_path)
+
+        if tool_result.startswith(
+            ("Error:", "Access denied:", "File reading error:")
+        ):
+            return tool_result
+
     messages = [
         {
-    "role": "system",
-    "content": (
-        "You are an AI Developer Assistant. "
-        "Use read_file to inspect files, "
-        "analyze_code to review source code, and "
-        "generate_unit_tests to prepare unit tests. "
-        "When a tool returns source code, use that content "
-        "to produce the requested analysis or tests. "
-        "Never claim to have read a file unless a tool "
-        "successfully returned its contents. "
-        "If a tool reports an error or access denial, "
-        "report that error and do not invent file contents."
-    )
-},
+            "role": "system",
+            "content": SYSTEM_PROMPT
+        },
         {
             "role": "user",
             "content": user_input
         }
     ]
 
-    # Allow a maximum of 3 tool-calling iterations
-    for iteration in range(3):
+    if tool_result is not None:
+        messages.append({
+            "role": "system",
+            "content": (
+                "The following content was retrieved from the "
+                "requested source file using an approved local tool. "
+                "Use it to answer the user's request.\n\n"
+                + tool_result
+            )
+        })
 
-        response = chat(
-    model=MODEL_NAME,
-    messages=messages,
-    tools=[
-        read_file,
-        analyze_code,
-        generate_unit_tests
-    ]
-)
+    response = chat(
+        model=MODEL_NAME,
+        messages=messages
+    )
 
-        messages.append(response.message)
-
-        tool_calls = response.message.tool_calls or []
-
-        # No tool requested: return the final answer
-        if not tool_calls:
-            return response.message.content
-
-        # Execute requested tools
-        for tool_call in tool_calls:
-
-            tool_name = tool_call.function.name
-            arguments = tool_call.function.arguments
-
-            print(f"[DEBUG] Tool called: {tool_name}, Arguments: {arguments}")
-
-            if tool_name not in AVAILABLE_TOOLS:
-                result = "Error: Unknown tool."
-
-            else:
-                try:
-                    result = AVAILABLE_TOOLS[tool_name](**arguments)
-
-                except Exception as error:
-                    result = f"Tool execution failed: {error}"
-
-            messages.append({
-                "role": "tool",
-                "tool_name": tool_name,
-                "content": str(result)
-            })
-
-    return "Maximum tool-calling iterations reached."
+    return response.message.content or "No response generated."
