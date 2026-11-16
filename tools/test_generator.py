@@ -36,6 +36,11 @@ def generate_unit_tests(file_path: str) -> str:
         "- For C++ GTest, use ASSERT_* assertions.\n"
         "- For C++ GTest, do not use GoogleMock or EXPECT_CALL.\n"
         "- Prefer Given_When_Then style test names.\n"
+        "- Include all required imports for the source functions.\n"
+        "- Generate complete, executable test files.\n"
+        "- Do not use undefined functions or variables.\n"
+        "- Use pytest.raises for expected Python exceptions.\n"
+        "- Return only valid test code when asked to generate tests.\n"
         "- Explain any assumptions and required dependencies.\n\n"
         f"Source code:\n{content}"
     )

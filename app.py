@@ -10,6 +10,7 @@ def main():
 
     print("Model: Qwen 2.5 3B")
     print("Available tool: read_file")
+    print("Available tools: read_file, analyze_code, generate_unit_tests")
     print("Type 'exit' to close.")
 
     while True:
