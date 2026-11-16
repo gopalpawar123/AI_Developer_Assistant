@@ -1,4 +1,5 @@
 
+import ast
 from pathlib import Path
 
 from tools.file_reader import read_file
@@ -12,8 +13,36 @@ TEST_FRAMEWORKS = {
 }
 
 
+def get_python_import_info(file_path: str, content: str):
+    """Find top-level Python functions and build an import statement."""
+
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return None, []
+
+    functions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    ]
+
+    module_path = Path(file_path).with_suffix("")
+    module_name = ".".join(module_path.parts)
+
+    if not functions:
+        return None, []
+
+    import_statement = (
+        f"from {module_name} import {', '.join(functions)}"
+    )
+
+    return import_statement, functions
+
+
 def generate_unit_tests(file_path: str) -> str:
-    """Read a source file and prepare instructions for AI unit test generation."""
+    """Read source code and prepare AI unit test instructions."""
 
     extension = Path(file_path).suffix.lower()
 
@@ -22,10 +51,42 @@ def generate_unit_tests(file_path: str) -> str:
 
     content = read_file(file_path)
 
-    if content.startswith(("Error:", "Access denied:", "File reading error:")):
+    if content.startswith(
+        ("Error:", "Access denied:", "File reading error:")
+    ):
         return content
 
     framework = TEST_FRAMEWORKS[extension]
+
+    python_requirements = ""
+
+    if extension == ".py":
+        import_statement, functions = get_python_import_info(
+            file_path,
+            content
+        )
+
+        if import_statement:
+            python_requirements = (
+                "\nPython source information:\n"
+                f"Available functions: {', '.join(functions)}\n"
+                f"Required import statement:\n"
+                f"{import_statement}\n\n"
+                "Python-specific requirements:\n"
+                "- Include the required import statement exactly.\n"
+                "- Import functions from the existing source module.\n"
+                "- Do not redefine production functions in tests.\n"
+                "- Use pytest.raises for expected exceptions.\n"
+                "- Generate standalone executable pytest tests.\n"
+                "- Return the complete tests inside one ```python code block.\n"
+            )
+        else:
+            python_requirements = (
+                "\nPython-specific requirements:\n"
+                "- Import the existing source module or classes correctly.\n"
+                "- Do not invent functions that are not in the source.\n"
+                "- Return the complete tests inside one ```python code block.\n"
+            )
 
     return (
         f"Generate unit tests for: {file_path}\n"
@@ -39,8 +100,7 @@ def generate_unit_tests(file_path: str) -> str:
         "- Include all required imports for the source functions.\n"
         "- Generate complete, executable test files.\n"
         "- Do not use undefined functions or variables.\n"
-        "- Use pytest.raises for expected Python exceptions.\n"
-        "- Return only valid test code when asked to generate tests.\n"
-        "- Explain any assumptions and required dependencies.\n\n"
+        "- Do not claim tests passed unless they were executed.\n"
+        f"{python_requirements}\n"
         f"Source code:\n{content}"
     )
