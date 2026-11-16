@@ -1,0 +1,17 @@
+
+FROM python:3.12-slim
+
+RUN groupadd --system testrunner \
+    && useradd --system --gid testrunner --create-home testrunner
+
+RUN pip install --no-cache-dir pytest==9.2.0
+
+WORKDIR /workspace
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+ENV PYTHONPATH=/workspace
+
+USER testrunner
+
+CMD ["python", "-m", "pytest", "--version"]
