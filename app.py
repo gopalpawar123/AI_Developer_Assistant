@@ -5,6 +5,7 @@ from agents.developer_agent import run_developer_agent
 from tools.test_writer import save_generated_test
 from tools.test_runner import run_generated_tests
 from tools.result_analyzer import analyze_test_result
+from tools.test_validator import validate_generated_test
 
 
 def extract_python_code(response):
@@ -73,11 +74,15 @@ def handle_test_execution(filename):
         if answer == "yes":
             print("\nAI Assistant: Analyzing test failure...")
 
-            analysis = analyze_test_result(result)
+            try:
+                analysis = analyze_test_result(result)
 
-            print("\n========== AI FAILURE ANALYSIS ==========")
-            print(analysis)
-            print("=========================================")
+                print("\n========== AI FAILURE ANALYSIS ==========")
+                print(analysis)
+                print("=========================================")
+
+            except Exception as error:
+                print("\nAI failure analysis unavailable:", error)
 
     elif status == "passed":
         print("\nAll generated tests passed successfully.")
@@ -99,36 +104,67 @@ def main():
     print("- Code Analyzer")
     print("- Unit Test Generator")
     print("- Test File Writer")
+    print("- Test Code Validator")
     print("- Docker Test Runner")
     print("- AI Failure Analyzer")
     print("Type 'exit' to close.")
 
     while True:
-        user_input = input("\nYou: ").strip()
-
-        if user_input.lower() == "exit":
-            print("AI Assistant: Goodbye!")
-            break
-
-        if not user_input:
-            continue
-
         try:
+            user_input = input("\nYou: ").strip()
+
+            if user_input.lower() == "exit":
+                print("AI Assistant: Goodbye!")
+                break
+
+            if not user_input:
+                continue
+
             print("\nAI Assistant: Processing...")
 
             response = run_developer_agent(user_input)
 
             print("\nAI Assistant:\n", response)
 
+            # Check whether test generation was requested.
             if not is_test_generation_request(user_input):
                 continue
 
+            # Extract generated Python code.
             code = extract_python_code(response)
 
             if not code:
                 print("\nNo Python test code found in the response.")
                 continue
 
+            # Phase 4.8: Validate before saving.
+            print("\nValidating generated test code...")
+
+            validation = validate_generated_test(
+                code,
+                required_imports=["add", "divide"]
+            )
+
+            if not validation["valid"]:
+                print("\nGenerated test validation failed:")
+
+                for error in validation["errors"]:
+                    print("-", error)
+
+                print("\nPlease regenerate or correct the tests.")
+                continue
+
+            if validation["warnings"]:
+                print("\nValidation warnings:")
+
+                for warning in validation["warnings"]:
+                    print("-", warning)
+
+                print("\nReview these warnings before saving.")
+
+            print("\nGenerated test validation passed.")
+
+            # Ask the user to review and save.
             print("\nReview the generated code above before saving.")
 
             answer = input(
@@ -151,6 +187,7 @@ def main():
             if not save_result.startswith("Saved successfully:"):
                 continue
 
+            # Request separate approval for Docker execution.
             handle_test_execution(filename)
 
         except (KeyboardInterrupt, EOFError):
