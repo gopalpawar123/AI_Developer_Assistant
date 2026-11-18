@@ -28,7 +28,12 @@ STRICT PYTHON TEST GENERATION RULES:
 9. Do not invent exceptions, APIs, or behavior not present in the source.
 10. Use pytest.raises only when the source raises an exception.
 11. Include all necessary imports.
-12. Return one complete executable Python code block.
+12. Every test name MUST accurately describe the function and behavior being tested.
+13. NEVER name a test after an operation or function that does not exist in the source.
+14. For example, test_multiplication MUST NOT call add() to test addition.
+15. Every test MUST call the production function corresponding to its test name.
+16. Do not create duplicate tests with misleading names.
+17. Return one complete executable Python code block.
 
 IMPORTANT:
 The generated tests must call the real imported production functions.

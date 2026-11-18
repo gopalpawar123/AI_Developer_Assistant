@@ -129,3 +129,41 @@ def validate_generated_test(
         "errors": errors,
         "warnings": warnings
     }
+    # Step 6: Detect misleading test names.
+    if source_module and source_imported_names:
+        for node in tree.body:
+            if not isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                continue
+
+            if not node.name.startswith("test_"):
+                continue
+
+            called_functions = {
+                call.func.id
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+            }
+
+            production_calls = called_functions & source_imported_names
+
+            if not production_calls:
+                continue
+
+            test_name = node.name.lower()
+
+            # Detect tests named after another imported production function.
+            mismatched_functions = [
+                function
+                for function in source_imported_names
+                if function.lower() in test_name
+                and function not in production_calls
+            ]
+
+            for function in mismatched_functions:
+                warnings.append(
+                    f"Test '{node.name}' references '{function}' "
+                    f"in its name but does not call it."
+                )
